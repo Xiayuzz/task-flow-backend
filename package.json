@@ -1,0 +1,47 @@
+{
+  "name": "task-flow-backend",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "postinstall": "prisma generate",
+    "dev": "node --watch src/server.js",
+    "start": "NODE_ENV=production node src/server.js",
+    "lint": "eslint .",
+    "prisma:gen": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "seed:admin": "node scripts/seed-admin.js",
+    "seed:menu": "node scripts/seed-menus.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "axios": "^1.13.5",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-async-errors": "^3.1.1",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2",
+    "mysql2": "^3.16.0",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.2",
+    "svg-captcha": "^1.4.0",
+    "swagger-ui-express": "^4.6.3",
+    "yamljs": "^0.3.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-n": "^16.6.2",
+    "eslint-plugin-promise": "^6.1.1",
+    "prisma": "^5.22.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

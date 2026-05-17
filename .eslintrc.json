@@ -1,0 +1,9 @@
+{
+  "env": { "es2022": true, "node": true },
+  "extends": ["eslint:recommended"],
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "module" },
+  "rules": {
+    "semi": ["error", "always"],
+    "space-before-function-paren": ["error", { "anonymous": "never", "named": "never", "asyncArrow": "always" }]
+  }
+}

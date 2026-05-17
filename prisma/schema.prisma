@@ -1,0 +1,377 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model comment {
+  id            BigInt    @id @default(autoincrement())
+  task_id       BigInt
+  user_id       BigInt
+  parent_id     BigInt?
+  content       String    @db.Text
+  created_at    DateTime  @default(now())
+  updated_at    DateTime
+  deleted_at    DateTime?
+  comment       comment?  @relation("commentTocomment", fields: [parent_id], references: [id], map: "Comment_parent_id_fkey")
+  other_comment comment[] @relation("commentTocomment")
+  task          task      @relation(fields: [task_id], references: [id], map: "Comment_task_id_fkey")
+  user          user      @relation(fields: [user_id], references: [id], map: "Comment_user_id_fkey")
+
+  @@index([user_id], map: "Comment_user_id_fkey")
+  @@index([parent_id], map: "idx_comments_parent")
+  @@index([task_id], map: "idx_comments_task")
+}
+
+model menu {
+  id         BigInt   @id @default(autoincrement())
+  name       String   @unique(map: "Menu_name_key") @db.VarChar(50)
+  title      String   @db.VarChar(50)
+  type       String   @db.VarChar(20)
+  path       String   @db.VarChar(100)
+  icon       String   @db.VarChar(50)
+  permission String?  @db.VarChar(50)
+  parent_id  BigInt?
+  order      Int      @default(0)
+  status     String   @default("active") @db.VarChar(20)
+  created_at DateTime @default(now())
+  updated_at DateTime
+  menu       menu?    @relation("menuTomenu", fields: [parent_id], references: [id], onDelete: Cascade, map: "Menu_parent_id_fkey")
+  other_menu menu[]   @relation("menuTomenu")
+
+  @@index([parent_id], map: "Menu_parent_id_fkey")
+}
+
+model notification {
+  id           BigInt   @id @default(autoincrement())
+  user_id      BigInt
+  type         String   @db.VarChar(50)
+  title        String   @db.VarChar(255)
+  content      String?  @db.Text
+  related_id   BigInt?
+  related_type String?  @db.VarChar(50)
+  is_read      Boolean  @default(false)
+  created_at   DateTime @default(now())
+  user         user     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "Notification_user_id_fkey")
+
+  @@index([user_id], map: "Notification_user_id_fkey")
+}
+
+model passwordresettoken {
+  id         BigInt   @id @default(autoincrement())
+  token      String   @unique(map: "PasswordResetToken_token_key") @db.VarChar(255)
+  user_id    BigInt
+  expires_at DateTime
+  used       Boolean  @default(false)
+  created_at DateTime @default(now())
+  user       user     @relation(fields: [user_id], references: [id], map: "PasswordResetToken_user_id_fkey")
+
+  @@index([user_id], map: "idx_password_reset_user")
+}
+
+model captcha {
+  id         BigInt   @id @default(autoincrement())
+  captcha_id String   @unique(map: "Captcha_captcha_id_key") @db.VarChar(64)
+  code       String   @db.VarChar(10)
+  used       Boolean  @default(false)
+  expires_at DateTime
+  created_at DateTime @default(now())
+}
+
+model role {
+  id          BigInt   @id @default(autoincrement())
+  name        String   @unique(map: "Role_name_key") @db.VarChar(50)
+  title       String   @db.VarChar(50)
+  permissions Json
+  created_at  DateTime @default(now())
+  updated_at  DateTime
+}
+
+model task {
+  id                          BigInt                @id @default(autoincrement())
+  title                       String                @db.VarChar(150)
+  description                 String?               @db.Text
+  creator_id                  BigInt
+  assignee_id                 BigInt?
+  status                      task_status           @default(pending)
+  priority                    task_priority         @default(medium)
+  due_date                    DateTime?
+  progress                    Int                   @default(0)
+  created_at                  DateTime              @default(now())
+  updated_at                  DateTime
+  deleted_at                  DateTime?
+  actual_hours                Int?
+  estimated_hours             Int?
+  is_reminder_on              Boolean               @default(false)
+  reminder_time               DateTime?
+  tags                        Json?
+  group_id                    BigInt?
+  group                       group?                @relation(fields: [group_id], references: [id], map: "Task_group_id_fkey")
+  comment                     comment[]
+  user_task_assignee_idTouser user?                 @relation("task_assignee_idTouser", fields: [assignee_id], references: [id], map: "Task_assignee_id_fkey")
+  user_task_creator_idTouser  user                  @relation("task_creator_idTouser", fields: [creator_id], references: [id], map: "Task_creator_id_fkey")
+  taskattachment              taskattachment[]
+  taskhistory                 taskhistory[]
+  taskreminder                taskreminder[]
+  tasktagrelationship         tasktagrelationship[]
+
+  @@index([assignee_id], map: "Task_assignee_id_fkey")
+  @@index([creator_id], map: "idx_tasks_creator")
+  @@index([group_id], map: "idx_tasks_group")
+  @@index([status, assignee_id], map: "idx_tasks_status_assignee")
+}
+
+model taskattachment {
+  id            BigInt   @id @default(autoincrement())
+  task_id       BigInt
+  name          String   @db.VarChar(255)
+  original_name String   @db.VarChar(255)
+  size          BigInt
+  mime_type     String   @db.VarChar(100)
+  url           String   @db.VarChar(255)
+  description   String?  @db.Text
+  uploaded_by   BigInt
+  uploaded_at   DateTime @default(now())
+  task          task     @relation(fields: [task_id], references: [id], onDelete: Cascade, map: "TaskAttachment_task_id_fkey")
+  user          user     @relation(fields: [uploaded_by], references: [id], map: "TaskAttachment_uploaded_by_fkey")
+
+  @@index([task_id], map: "idx_attachments_task")
+  @@index([uploaded_by], map: "idx_attachments_user")
+}
+
+model taskhistory {
+  id         BigInt   @id @default(autoincrement())
+  task_id    BigInt
+  user_id    BigInt
+  field      String   @db.VarChar(50)
+  old_value  String?  @db.Text
+  new_value  String?  @db.Text
+  created_at DateTime @default(now())
+  task       task     @relation(fields: [task_id], references: [id], map: "TaskHistory_task_id_fkey")
+  user       user     @relation(fields: [user_id], references: [id], map: "TaskHistory_user_id_fkey")
+
+  @@index([user_id], map: "TaskHistory_user_id_fkey")
+  @@index([task_id], map: "idx_history_task")
+}
+
+model taskreminder {
+  id            BigInt                     @id @default(autoincrement())
+  task_id       BigInt
+  user_id       BigInt
+  reminder_type taskreminder_reminder_type
+  reminder_time DateTime
+  status        taskreminder_status        @default(pending)
+  created_at    DateTime                   @default(now())
+  sent_at       DateTime?
+  task          task                       @relation(fields: [task_id], references: [id], onDelete: Cascade, map: "TaskReminder_task_id_fkey")
+  user          user                       @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "TaskReminder_user_id_fkey")
+
+  @@index([status], map: "idx_reminders_status")
+  @@index([task_id], map: "idx_reminders_task")
+  @@index([reminder_time], map: "idx_reminders_time")
+  @@index([user_id], map: "idx_reminders_user")
+}
+
+model taskstatistics {
+  id                BigInt                @id @default(autoincrement())
+  user_id           BigInt?
+  team_id           BigInt?
+  period            taskstatistics_period
+  date              DateTime
+  total_tasks       Int                   @default(0)
+  completed_tasks   Int                   @default(0)
+  pending_tasks     Int                   @default(0)
+  in_progress_tasks Int                   @default(0)
+  overdue_tasks     Int                   @default(0)
+  total_hours       Decimal               @default(0.00) @db.Decimal(10, 2)
+  created_at        DateTime              @default(now())
+  updated_at        DateTime
+  user              user?                 @relation(fields: [user_id], references: [id], map: "TaskStatistics_user_id_fkey")
+
+  @@index([period, date], map: "idx_stats_period_date")
+  @@index([team_id], map: "idx_stats_team")
+  @@index([user_id], map: "idx_stats_user")
+}
+
+model tasktag {
+  id                  BigInt                @id @default(autoincrement())
+  name                String                @unique(map: "TaskTag_name_key") @db.VarChar(50)
+  color               String                @default("#4CAF50") @db.VarChar(20)
+  created_by          BigInt
+  created_at          DateTime              @default(now())
+  updated_at          DateTime
+  user                user                  @relation(fields: [created_by], references: [id], map: "TaskTag_created_by_fkey")
+  tasktagrelationship tasktagrelationship[]
+
+  @@index([created_by], map: "TaskTag_created_by_fkey")
+}
+
+model tasktagrelationship {
+  task_id BigInt
+  tag_id  BigInt
+  tasktag tasktag @relation(fields: [tag_id], references: [id], onDelete: Cascade, map: "TaskTagRelationship_tag_id_fkey")
+  task    task    @relation(fields: [task_id], references: [id], onDelete: Cascade, map: "TaskTagRelationship_task_id_fkey")
+
+  @@id([task_id, tag_id])
+  @@index([tag_id], map: "idx_tag_task")
+  @@index([task_id], map: "idx_task_tag")
+}
+
+model user {
+  id                          BigInt               @id @default(autoincrement())
+  name                        String               @db.VarChar(50)
+  email                       String               @unique(map: "User_email_key") @db.VarChar(120)
+  password_hash               String               @db.VarChar(255)
+  role                        String               @default("user") @db.VarChar(20)
+  avatar                      String?              @db.VarChar(255)
+  created_at                  DateTime             @default(now())
+  updated_at                  DateTime
+  notification_settings       Json?
+  timezone                    String               @default("Asia/Shanghai") @db.VarChar(50)
+  status                      String               @default("active") @db.VarChar(20)
+  username                    String?              @unique(map: "User_username_key") @db.VarChar(50)
+  comment                     comment[]
+  notification                notification[]
+  passwordresettoken          passwordresettoken[]
+  task_task_assignee_idTouser task[]               @relation("task_assignee_idTouser")
+  task_task_creator_idTouser  task[]               @relation("task_creator_idTouser")
+  taskattachment              taskattachment[]
+  taskhistory                 taskhistory[]
+  taskreminder                taskreminder[]
+  taskstatistics              taskstatistics[]
+  tasktag                     tasktag[]
+  userpermission              userpermission[]
+  user_settings               user_settings?
+  activity_log                activity_log[]
+  saved_filter                saved_filter[]
+  group                       group[]
+  group_member                group_member[]
+  department_id               BigInt?
+  department                  department?          @relation(fields: [department_id], references: [id], map: "User_department_id_fkey")
+
+  @@index([department_id], map: "idx_users_department")
+}
+
+model department {
+  id          BigInt   @id @default(autoincrement())
+  name        String   @db.VarChar(50)
+  description String?  @db.Text
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  users       user[]
+}
+
+model userpermission {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  permission String   @db.VarChar(50)
+  created_at DateTime @default(now())
+  updated_at DateTime
+  user       user     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "UserPermission_user_id_fkey")
+
+  @@unique([user_id, permission], map: "UserPermission_user_id_permission_key")
+}
+
+model user_settings {
+  user_id     BigInt   @id
+  preferences Json
+  updated_at  DateTime @updatedAt
+  user        user     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "UserSettings_user_id_fkey")
+
+  @@index([user_id], map: "UserSettings_user_id_fkey")
+}
+
+model activity_log {
+  id          BigInt   @id @default(autoincrement())
+  user_id     BigInt
+  action      String   @db.VarChar(50)
+  target_type String   @db.VarChar(50)
+  target_id   BigInt
+  details     String?  @db.Text
+  ip_address  String?  @db.VarChar(50)
+  created_at  DateTime @default(now())
+  user        user     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "ActivityLog_user_id_fkey")
+
+  @@index([user_id], map: "ActivityLog_user_id_fkey")
+  @@index([target_type, target_id], map: "idx_activity_target")
+}
+
+model saved_filter {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  name       String   @db.VarChar(100)
+  config     Json
+  is_public  Boolean  @default(false)
+  created_at DateTime @default(now())
+  user       user     @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "SavedFilter_user_id_fkey")
+
+  @@index([user_id], map: "SavedFilter_user_id_fkey")
+}
+
+model group {
+  id          BigInt       @id @default(autoincrement())
+  name        String       @db.VarChar(255)
+  description String?      @db.Text
+  created_by  BigInt
+  created_at  DateTime     @default(now())
+  updated_at  DateTime
+  user        user         @relation(fields: [created_by], references: [id], map: "group_created_by_fkey")
+  group_member group_member[]
+  tasks        task[]
+
+  @@index([created_by], map: "group_created_by_fkey")
+}
+
+model group_member {
+  id        BigInt  @id @default(autoincrement())
+  group_id  BigInt
+  user_id   BigInt
+  role      group_role @default(member)
+  joined_at DateTime @default(now())
+  group     group   @relation(fields: [group_id], references: [id], onDelete: Cascade, map: "group_member_group_id_fkey")
+  user      user    @relation(fields: [user_id], references: [id], map: "group_member_user_id_fkey")
+
+  @@unique([group_id, user_id], map: "group_member_group_id_user_id_key")
+  @@index([group_id], map: "group_member_group_id_fkey")
+  @@index([user_id], map: "group_member_user_id_fkey")
+}
+
+enum group_role {
+  owner
+  admin
+  member
+}
+
+enum taskreminder_reminder_type {
+  email
+  sms
+  in_app
+}
+
+enum taskstatistics_period {
+  daily
+  weekly
+  monthly
+}
+
+enum task_status {
+  pending
+  in_progress
+  done
+}
+
+enum taskreminder_status {
+  pending
+  sent
+  failed
+  skipped
+}
+
+enum task_priority {
+  low
+  medium
+  high
+}
