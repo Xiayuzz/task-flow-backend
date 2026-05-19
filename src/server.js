@@ -11,6 +11,11 @@ import { errorHandler, notFound } from './utils/error.js';
 import { verifySocketAuth } from './utils/socketAuth.js';
 import { prisma } from './db.js';
 import { processReminders } from './services/reminderService.js';
+import {
+  notifyTaskAssigned,
+  notifyTaskCommented,
+  notifyTaskCompleted
+} from './services/notificationService.js';
 import path from 'path';
 import expressStatic from 'express';
 
@@ -76,6 +81,21 @@ io.on('connection', (socket) => {
       // record simple history
       await prisma.taskhistory.create({ data: { task_id: id, user_id: BigInt(user.id), field: 'socket_update', old_value: null, new_value: JSON.stringify(data) } });
       io.emit('task:update', updated);
+      if (data.assignee_id !== undefined && updated.assignee_id && updated.assignee_id !== task.assignee_id) {
+        await notifyTaskAssigned({
+          task: updated,
+          assigneeId: updated.assignee_id,
+          actorId: user.id,
+          io
+        });
+      }
+      if (data.status !== undefined && task.status !== 'done' && updated.status === 'done') {
+        await notifyTaskCompleted({
+          task: updated,
+          actorId: user.id,
+          io
+        });
+      }
       ack && ack({ ok: true, task: updated });
     } catch (e) {
       ack && ack({ error: 'SERVER_ERROR', message: e.message });
@@ -95,6 +115,11 @@ io.on('connection', (socket) => {
       const now = new Date();
       const comment = await prisma.comment.create({ data: { task_id: taskId, user_id: BigInt(user.id), content: payload.content, parent_id: payload.parentId ? BigInt(payload.parentId) : undefined, created_at: now, updated_at: now } });
       io.emit('comment:new', comment);
+      await notifyTaskCommented({
+        task,
+        actorId: user.id,
+        io
+      });
       ack && ack({ ok: true, comment });
     } catch (e) {
       ack && ack({ error: 'SERVER_ERROR', message: e.message });

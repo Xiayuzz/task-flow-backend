@@ -5,7 +5,11 @@ import { AppError } from '../utils/error.js';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
 import { logAudit } from '../utils/audit.js';
-import { createNotification } from '../services/notificationService.js';
+import {
+  notifyTaskAssigned,
+  notifyTaskCommented,
+  notifyTaskCompleted
+} from '../services/notificationService.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -14,50 +18,10 @@ function canAccessTask(user, task) {
   return user.role === 'admin' || user.id === Number(task.creator_id) || (task.assignee_id && user.id === Number(task.assignee_id));
 }
 
-const taskTitle = (task) => `任务 "${task.title}"`;
-
-const uniqueRecipients = (ids, actorId) => {
-  const actor = BigInt(actorId);
-  return [...new Set(ids.filter(Boolean).map((id) => BigInt(id)).filter((id) => id !== actor).map(String))];
-};
-
-const notifyTaskAssigned = async ({ task, assigneeId, actorId, io }) => {
-  const recipients = uniqueRecipients([assigneeId], actorId);
-  await Promise.all(recipients.map((userId) => createNotification({
-    userId,
-    type: 'task_assigned',
-    title: '任务指派',
-    content: `${taskTitle(task)} 已指派给你`,
-    relatedId: task.id,
-    relatedType: 'task',
-    io
-  })));
-};
-
-const notifyTaskCommented = async ({ task, actorId, io }) => {
-  const recipients = uniqueRecipients([task.creator_id, task.assignee_id], actorId);
-  await Promise.all(recipients.map((userId) => createNotification({
-    userId,
-    type: 'comment_created',
-    title: '任务评论',
-    content: `${taskTitle(task)} 有新评论`,
-    relatedId: task.id,
-    relatedType: 'task',
-    io
-  })));
-};
-
 const notifyTaskStatusChanged = async ({ task, oldStatus, newStatus, actorId, io }) => {
-  const recipients = uniqueRecipients([task.creator_id, task.assignee_id], actorId);
-  await Promise.all(recipients.map((userId) => createNotification({
-    userId,
-    type: 'task_status_changed',
-    title: '任务状态变更',
-    content: `${taskTitle(task)} 状态已从 ${oldStatus} 变更为 ${newStatus}`,
-    relatedId: task.id,
-    relatedType: 'task',
-    io
-  })));
+  if (oldStatus !== 'done' && newStatus === 'done') {
+    await notifyTaskCompleted({ task, actorId, io });
+  }
 };
 
 export function taskRoutes() {

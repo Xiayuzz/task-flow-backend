@@ -12,6 +12,16 @@ export function userRoutes() {
   const router = express.Router();
   router.use(authMiddleware());
 
+  const parseIdList = (value) => {
+    const values = Array.isArray(value) ? value : [value];
+    return values
+      .filter(v => v !== undefined && v !== null && v !== '')
+      .flatMap(v => String(v).split(','))
+      .map(v => v.trim())
+      .filter(Boolean)
+      .map(v => BigInt(v));
+  };
+
   // ensure upload dir
   const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'avatars');
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -59,8 +69,8 @@ export function userRoutes() {
   router.get('/search', async (req, res) => {
     const page = Number(req.query.page) || 1;
     const pageSize = Math.min(Number(req.query.pageSize) || 20, 100);
-    const { keyword, role, status, sortField, sortOrder, excludeIds } = req.query;
-    const departmentId = req.query.departmentId ? BigInt(req.query.departmentId) : undefined;
+    const { keyword, role, status, sortField, sortOrder } = req.query;
+    const excludeIds = req.query.excludeIds ?? req.query['excludeIds[]'];
 
     const where = {};
     if (keyword) {
@@ -70,13 +80,13 @@ export function userRoutes() {
         { email: { contains: keyword } }
       ];
     }
-    if (departmentId) where.department_id = departmentId;
+    if (req.query.departmentId) where.department_id = BigInt(req.query.departmentId);
     if (role) where.role = role;
     if (status) where.status = status;
 
     // 排除指定用户ID
     if (excludeIds) {
-      const ids = excludeIds.split(',').map(id => BigInt(id.trim())).filter(id => id);
+      const ids = parseIdList(excludeIds);
       if (ids.length > 0) {
         where.id = { notIn: ids };
       }
@@ -383,7 +393,11 @@ export function userRoutes() {
         task_assigned: true,
         task_updated: true,
         task_completed: true,
-        comment_created: false,
+        task_comment: false,
+        task_deadline: true,
+        group_invitation: true,
+        group_task_assigned: true,
+        system_notification: true,
         reminders: true
       },
       sms: {

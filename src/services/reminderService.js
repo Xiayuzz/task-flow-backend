@@ -1,5 +1,5 @@
 import { prisma } from '../db.js';
-import { emitNotification } from './notificationService.js';
+import { emitNotification, NOTIFICATION_TYPES } from './notificationService.js';
 import crypto from 'crypto';
 
 const formatReminderTime = (date) => {
@@ -43,7 +43,7 @@ export const processReminders = async (io) => {
 
         const notificationData = {
           user_id: reminder.user_id,
-          type: 'reminder',
+          type: NOTIFICATION_TYPES.TASK_DEADLINE,
           title: '任务提醒',
           content: `任务 "${reminder.task.title}" 的提醒时间已到（提醒时间：${formatReminderTime(reminder.reminder_time)}）`,
           related_id: reminder.task_id,

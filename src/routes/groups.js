@@ -1,5 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { createNotification, NOTIFICATION_TYPES } from '../services/notificationService.js';
 const prisma = new PrismaClient();
 
 export function groupRoutes() {
@@ -607,6 +608,16 @@ router.post('/:id/members', async (req, res) => {
           }
         }
       }
+    });
+
+    await createNotification({
+      userId,
+      type: NOTIFICATION_TYPES.GROUP_INVITATION,
+      title: '群组邀请',
+      content: `你已加入群组 "${group.name}"`,
+      relatedId: group.id,
+      relatedType: 'group',
+      io: req.app.get('io')
     });
     
     res.json({
