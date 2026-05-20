@@ -108,8 +108,11 @@ export const notifyTaskAssigned = async ({ task, assigneeId, actorId, io }) => {
   );
 };
 
-export const notifyTaskCommented = async ({ task, actorId, io }) => {
-  const recipients = uniqueNotificationRecipients([task.creator_id, task.assignee_id], actorId);
+export const notifyTaskCommented = async ({ task, actorId, io, recipientIds = [] }) => {
+  const recipients = uniqueNotificationRecipients(
+    [task.creator_id, task.assignee_id, ...recipientIds],
+    actorId
+  );
   await Promise.all(
     recipients.map((userId) =>
       createNotification({

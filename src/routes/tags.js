@@ -56,11 +56,13 @@ export function tagRoutes() {
 
   router.post('/', validate(createTagSchema), async (req, res) => {
     const { name, color } = req.body;
+    const now = new Date();
     const tag = await prisma.tasktag.create({
       data: {
         name,
         color,
-        created_by: BigInt(req.user.id)
+        created_by: BigInt(req.user.id),
+        updated_at: now
       },
       select: {
         id: true,

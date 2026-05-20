@@ -365,7 +365,13 @@ export function userRoutes() {
       throw new AppError(400, 'VALIDATION_ERROR', '不能删除自己');
     }
     
-    await prisma.user.delete({ where: { id } });
+    await prisma.user.update({
+      where: { id },
+      data: {
+        status: 'inactive',
+        updated_at: new Date()
+      }
+    });
     
     res.json({
       success: true,

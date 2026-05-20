@@ -21,6 +21,29 @@ import expressStatic from 'express';
 
 const app = express();
 
+const commentUserSelect = {
+  id: true,
+  name: true,
+  username: true,
+  avatar: true
+};
+
+const toCommentResponse = (comment) => ({
+  id: Number(comment.id),
+  taskId: Number(comment.task_id),
+  userId: Number(comment.user_id),
+  content: comment.content,
+  parentId: comment.parent_id ? Number(comment.parent_id) : null,
+  createdAt: comment.created_at,
+  updatedAt: comment.updated_at,
+  user: comment.user ? {
+    id: Number(comment.user.id),
+    name: comment.user.name,
+    username: comment.user.username,
+    avatar: comment.user.avatar
+  } : undefined
+});
+
 // BigInt JSON serialization
 // eslint-disable-next-line no-extend-native
 BigInt.prototype.toJSON = function() { return Number(this.toString()); };
@@ -112,15 +135,25 @@ io.on('connection', (socket) => {
       const canAccess = user.role === 'admin' || user.id === Number(task.creator_id) || (task.assignee_id && user.id === Number(task.assignee_id));
       if (!canAccess) return ack && ack({ error: 'FORBIDDEN' });
       if (!payload.content) return ack && ack({ error: 'BAD_REQUEST', message: 'content required' });
+      let parent = null;
+      if (payload.parentId) {
+        parent = await prisma.comment.findFirst({ where: { id: BigInt(payload.parentId), deleted_at: null } });
+        if (!parent) return ack && ack({ error: 'BAD_REQUEST', message: 'parent comment not found' });
+      }
       const now = new Date();
-      const comment = await prisma.comment.create({ data: { task_id: taskId, user_id: BigInt(user.id), content: payload.content, parent_id: payload.parentId ? BigInt(payload.parentId) : undefined, created_at: now, updated_at: now } });
-      io.emit('comment:new', comment);
+      const comment = await prisma.comment.create({
+        data: { task_id: taskId, user_id: BigInt(user.id), content: payload.content, parent_id: payload.parentId ? BigInt(payload.parentId) : undefined, created_at: now, updated_at: now },
+        include: { user: { select: commentUserSelect } }
+      });
+      const formattedComment = toCommentResponse(comment);
+      io.emit('comment:new', formattedComment);
       await notifyTaskCommented({
         task,
         actorId: user.id,
+        recipientIds: parent ? [parent.user_id] : [],
         io
       });
-      ack && ack({ ok: true, comment });
+      ack && ack({ ok: true, comment: formattedComment });
     } catch (e) {
       ack && ack({ error: 'SERVER_ERROR', message: e.message });
     }

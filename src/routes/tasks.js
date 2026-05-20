@@ -18,6 +18,29 @@ function canAccessTask(user, task) {
   return user.role === 'admin' || user.id === Number(task.creator_id) || (task.assignee_id && user.id === Number(task.assignee_id));
 }
 
+const commentUserSelect = {
+  id: true,
+  name: true,
+  username: true,
+  avatar: true
+};
+
+const toCommentResponse = (comment) => ({
+  id: Number(comment.id),
+  taskId: Number(comment.task_id),
+  userId: Number(comment.user_id),
+  content: comment.content,
+  parentId: comment.parent_id ? Number(comment.parent_id) : null,
+  createdAt: comment.created_at,
+  updatedAt: comment.updated_at,
+  user: comment.user ? {
+    id: Number(comment.user.id),
+    name: comment.user.name,
+    username: comment.user.username,
+    avatar: comment.user.avatar
+  } : undefined
+});
+
 const notifyTaskStatusChanged = async ({ task, oldStatus, newStatus, actorId, io }) => {
   if (oldStatus !== 'done' && newStatus === 'done') {
     await notifyTaskCompleted({ task, actorId, io });
@@ -325,10 +348,16 @@ export function taskRoutes() {
     const pageSize = Math.min(Number(req.query.pageSize) || 20, 100);
     const where = { task_id: taskId, deleted_at: null };
     const [items, total] = await Promise.all([
-      prisma.comment.findMany({ where, skip: (page - 1) * pageSize, take: pageSize, orderBy: { created_at: 'asc' } }),
+      prisma.comment.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { created_at: 'asc' },
+        include: { user: { select: commentUserSelect } }
+      }),
       prisma.comment.count({ where })
     ]);
-    res.json({ items, total, page, pageSize });
+    res.json({ items: items.map(toCommentResponse), total, page, pageSize });
   });
 
   const commentCreateSchema = z.object({ 
@@ -343,20 +372,26 @@ export function taskRoutes() {
     if (!canAccessTask(req.user, task)) throw new AppError(403, 'FORBIDDEN', '无权限');
     const { content, parentId } = req.body;
     if (!content) throw new AppError(400, 'BAD_REQUEST', '内容必填');
+    let parent = null;
     if (parentId) {
-      const parent = await prisma.comment.findFirst({ where: { id: BigInt(parentId), deleted_at: null } });
+      parent = await prisma.comment.findFirst({ where: { id: BigInt(parentId), deleted_at: null } });
       if (!parent) throw new AppError(400, 'BAD_REQUEST', '父评论不存在');
     }
     const now = new Date();
-    const comment = await prisma.comment.create({ data: { task_id: taskId, user_id: BigInt(req.user.id), content, parent_id: parentId ? BigInt(parentId) : undefined, created_at: now, updated_at: now } });
+    const comment = await prisma.comment.create({
+      data: { task_id: taskId, user_id: BigInt(req.user.id), content, parent_id: parentId ? BigInt(parentId) : undefined, created_at: now, updated_at: now },
+      include: { user: { select: commentUserSelect } }
+    });
+    const formattedComment = toCommentResponse(comment);
     const io = req.app.get('io');
-    io.emit('comment:new', comment);
+    io.emit('comment:new', formattedComment);
     await notifyTaskCommented({
       task,
       actorId: req.user.id,
+      recipientIds: parent ? [parent.user_id] : [],
       io
     });
-    res.status(201).json(comment);
+    res.status(201).json(formattedComment);
   });
 
   const patchSchema = z.object({
