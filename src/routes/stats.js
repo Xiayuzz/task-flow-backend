@@ -234,11 +234,13 @@ export function statsRoutes() {
   router.get('/tasks/completion-time', async (req, res) => {
     const { period = 'daily', groupBy = 'priority' } = req.query;
     
-    // 查询已完成任务
+    // 查询已汇报实际工时的任务。进度汇报接口更新 actual_hours，但不一定会把状态改为 done。
     const tasks = await prisma.task.findMany({
       where: {
-        status: 'done',
-        deleted_at: null
+        deleted_at: null,
+        actual_hours: {
+          gt: 0
+        }
       },
       select: {
         priority: true,
@@ -246,19 +248,21 @@ export function statsRoutes() {
         assignee_id: true,
         tags: true,
         created_at: true,
-        updated_at: true
+        updated_at: true,
+        actual_hours: true
       }
     });
     
     // 计算平均和中位数完成时间
     const completionTimes = [];
     const byGroup = {};
+    const trendMap = {};
     
     tasks.forEach(task => {
-      // 使用updated_at作为完成时间的近似值
-      const timeDiff = Math.abs(task.updated_at - task.created_at);
-      const days = timeDiff / (1000 * 60 * 60 * 24);
-      completionTimes.push(days);
+      const hours = Number(task.actual_hours || 0);
+      if (hours <= 0) return;
+
+      completionTimes.push(hours);
       
       let groupKey;
       switch (groupBy) {
@@ -272,7 +276,7 @@ export function statsRoutes() {
           groupKey = task.assignee_id || 'unassigned';
           break;
         case 'tag':
-          groupKey = task.tags && task.tags.length > 0 ? task.tags[0] : 'untagged';
+          groupKey = Array.isArray(task.tags) && task.tags.length > 0 ? task.tags[0] : 'untagged';
           break;
         default:
           groupKey = 'all';
@@ -281,7 +285,13 @@ export function statsRoutes() {
       if (!byGroup[groupKey]) {
         byGroup[groupKey] = [];
       }
-      byGroup[groupKey].push(days);
+      byGroup[groupKey].push(hours);
+
+      const dateKey = formatDate(task.updated_at || task.created_at, period);
+      if (!trendMap[dateKey]) {
+        trendMap[dateKey] = [];
+      }
+      trendMap[dateKey].push(hours);
     });
     
     // 计算平均值
@@ -312,9 +322,12 @@ export function statsRoutes() {
     
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dateKey = formatDate(d, period);
+      const times = trendMap[dateKey] || [];
       trend.push({
         date: dateKey,
-        avgTime: avgCompletionTime
+        avgTime: times.length > 0 
+          ? times.reduce((sum, time) => sum + time, 0) / times.length 
+          : 0
       });
     }
     
